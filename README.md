@@ -96,6 +96,51 @@ All endpoints are prefixed with `/api`.
 - `GET /api/progress/{trackId}`
 - `PUT /api/progress/{trackId}` — `{ positionSeconds }`
 
+## Development
+
+### Prerequisites
+
+- [.NET 9 SDK](https://dotnet.microsoft.com/download)
+- [Node.js 22](https://nodejs.org/) and npm
+
+### Backend
+
+```bash
+cd backend
+
+# Restore dependencies
+dotnet restore
+
+# Run (DB and cover art will be written to ./data/ by default)
+DATA_PATH=./data ASPNETCORE_URLS=http://localhost:5000 dotnet run
+```
+
+The API is now available at `http://localhost:5000/api`.
+
+### Frontend
+
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start dev server (proxies /api/* to localhost:5000 automatically)
+npm run dev
+```
+
+The app is now available at `http://localhost:5173`.
+
+Both processes must run at the same time. The Vite dev server handles hot-reload for the frontend; the backend must be restarted manually after C# changes (or use `dotnet watch run` instead of `dotnet run`).
+
+### Windows
+
+Substitute the environment variables on Windows:
+
+```powershell
+$env:DATA_PATH="./data"; $env:ASPNETCORE_URLS="http://localhost:5000"; dotnet run
+```
+
 ## Stack
 
 - **Backend**: .NET 9 Minimal API, Entity Framework Core, SQLite, TagLibSharp

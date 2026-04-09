@@ -15,27 +15,16 @@ watch(() => player.isPlaying, (playing) => {
   if (playing) videoRef.value.play()
   else videoRef.value.pause()
 })
-
 watch(() => player.currentTime, (time) => {
   if (!videoRef.value) return
-  if (Math.abs(videoRef.value.currentTime - time) > 1) {
-    videoRef.value.currentTime = time
-  }
+  if (Math.abs(videoRef.value.currentTime - time) > 1) videoRef.value.currentTime = time
 })
-
-watch(() => player.isMuted, (muted) => {
-  if (videoRef.value) videoRef.value.muted = muted
-})
-
-watch(() => player.volume, (vol) => {
-  if (videoRef.value) videoRef.value.volume = vol
-})
+watch(() => player.isMuted, (muted) => { if (videoRef.value) videoRef.value.muted = muted })
+watch(() => player.volume, (vol) => { if (videoRef.value) videoRef.value.volume = vol })
 
 function onTimeUpdate() {
-  if (!videoRef.value) return
-  player.currentTime = videoRef.value.currentTime
+  if (videoRef.value) player.currentTime = videoRef.value.currentTime
 }
-
 function onLoadedMetadata() {
   if (!videoRef.value) return
   player.duration = videoRef.value.duration
@@ -45,12 +34,16 @@ function onLoadedMetadata() {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 bg-black/90 flex items-center justify-center pb-20">
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center"
+    style="background: rgba(0,0,0,0.92); backdrop-filter: blur(8px); padding-bottom: 80px;"
+  >
     <button
       @click="player.toggleMediaMode()"
-      class="absolute top-4 right-4 text-white/60 hover:text-white transition-colors p-2"
+      class="absolute top-5 right-5 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-105"
+      style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);"
     >
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+      <svg class="w-4 h-4 text-white/60" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
       </svg>
     </button>
@@ -58,7 +51,8 @@ function onLoadedMetadata() {
     <video
       ref="videoRef"
       :src="streamUrl"
-      class="max-w-full max-h-full rounded-lg shadow-2xl"
+      class="max-w-full max-h-full rounded-2xl"
+      style="box-shadow: 0 32px 80px rgba(0,0,0,0.8);"
       preload="auto"
       @timeupdate="onTimeUpdate"
       @loadedmetadata="onLoadedMetadata"
