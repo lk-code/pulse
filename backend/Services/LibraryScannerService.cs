@@ -178,6 +178,9 @@ public class LibraryScannerService(
                 state.ProcessedFiles++;
             }
 
+            // Link paired tracks (same filename, audio + video counterparts)
+            await LinkPairedTracksAsync(db, libraryId, filesByNameWithoutExt);
+
             library.LastScannedAt = DateTimeOffset.UtcNow;
             state.LastScannedAt = library.LastScannedAt;
             state.TrackCount = await db.Tracks.CountAsync(t => t.LibraryId == libraryId && t.IsAvailable);
@@ -193,6 +196,31 @@ public class LibraryScannerService(
             state.IsScanning = false;
             state.CurrentFile = null;
         }
+    }
+
+    private static async Task LinkPairedTracksAsync(
+        PulseDbContext db,
+        int libraryId,
+        Dictionary<string, List<string>> filesByNameWithoutExt)
+    {
+        foreach (var (_, siblings) in filesByNameWithoutExt.Where(kv => kv.Value.Count > 1))
+        {
+            var tracks = await db.Tracks
+                .Where(t => t.LibraryId == libraryId && t.IsAvailable && siblings.Contains(t.FilePath))
+                .ToListAsync();
+
+            if (tracks.Count < 2) continue;
+
+            var audioTrack = tracks.FirstOrDefault(t => t.FileType == FileType.Audio);
+            var videoTrack = tracks.FirstOrDefault(t => t.FileType == FileType.Video);
+
+            if (audioTrack is null || videoTrack is null) continue;
+
+            audioTrack.PairedTrackId = videoTrack.Id;
+            videoTrack.PairedTrackId = audioTrack.Id;
+        }
+
+        await db.SaveChangesAsync();
     }
 
     private static async Task<Artist> GetOrCreateArtistAsync(

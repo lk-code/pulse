@@ -32,6 +32,7 @@ function toPlayerTrack(t: AlbumDetail['tracks'][number]): Track {
     durationSeconds: t.durationSeconds,
     fileType: t.fileType,
     hasMatchingPair: t.hasMatchingPair,
+    pairedTrackId: t.pairedTrackId,
     isAvailable: true,
     artist: t.artist,
     album: {

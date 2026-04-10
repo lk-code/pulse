@@ -50,6 +50,7 @@ export interface TrackInAlbum {
   durationSeconds: number
   fileType: FileType
   hasMatchingPair: boolean
+  pairedTrackId: number | null
   artist: Artist
 }
 
@@ -63,6 +64,7 @@ export interface Track {
   durationSeconds: number
   fileType: FileType
   hasMatchingPair: boolean
+  pairedTrackId: number | null
   isAvailable: boolean
   artist: Artist
   album: {

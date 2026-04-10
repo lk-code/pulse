@@ -70,6 +70,7 @@ public static class TrackEndpoints
                     t.DurationSeconds,
                     t.FileType,
                     t.HasMatchingPair,
+                    t.PairedTrackId,
                     t.IsAvailable,
                     Artist = new { t.Artist.Id, t.Artist.Name, t.Artist.NormalizedName },
                     Album = new

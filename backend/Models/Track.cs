@@ -26,6 +26,7 @@ public class Track
     public string FilePath { get; set; } = string.Empty;
     public FileType FileType { get; set; }
     public bool HasMatchingPair { get; set; }
+    public int? PairedTrackId { get; set; }
     public DateTimeOffset FileLastModified { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }

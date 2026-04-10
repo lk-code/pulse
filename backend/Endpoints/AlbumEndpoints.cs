@@ -71,6 +71,7 @@ public static class AlbumEndpoints
                             t.DurationSeconds,
                             t.FileType,
                             t.HasMatchingPair,
+                            t.PairedTrackId,
                             Artist = new { t.Artist.Id, t.Artist.Name, t.Artist.NormalizedName }
                         })
                         .ToList()

@@ -20,7 +20,9 @@ export const usePlayerStore = defineStore('player', () => {
 
   let progressInterval: ReturnType<typeof setInterval> | null = null
 
-  const canSwitchMode = computed(() => currentTrack.value?.hasMatchingPair === true)
+  const canSwitchMode = computed(() =>
+    currentTrack.value?.hasMatchingPair === true && currentTrack.value?.pairedTrackId != null
+  )
 
   function setQueue(tracks: Track[], startIndex = 0) {
     queue.value = tracks

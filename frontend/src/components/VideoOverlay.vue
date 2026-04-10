@@ -6,9 +6,14 @@ import { api } from '../api'
 const player = usePlayerStore()
 const videoRef = ref<HTMLVideoElement | null>(null)
 
-const streamUrl = computed(() =>
-  player.currentTrack ? api.tracks.streamUrl(player.currentTrack.id) : ''
-)
+const streamUrl = computed(() => {
+  if (!player.currentTrack) return ''
+  // If current track is audio and has a video pair, stream the video file instead
+  const trackId = player.currentTrack.fileType === 'Audio' && player.currentTrack.pairedTrackId
+    ? player.currentTrack.pairedTrackId
+    : player.currentTrack.id
+  return api.tracks.streamUrl(trackId)
+})
 
 watch(() => player.isPlaying, (playing) => {
   if (!videoRef.value) return
