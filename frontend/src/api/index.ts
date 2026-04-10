@@ -1,7 +1,9 @@
 import type { Library, Track, TracksResponse, Playlist, PlaylistTrackEntry, ScanStatus, PlaybackProgress } from '../types'
 
+const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(path, options)
+  const res = await fetch(`${apiBase}${path}`, options)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   if (res.status === 204) return undefined as T
   return res.json()
@@ -29,6 +31,7 @@ export const api = {
       libraryId?: number
       search?: string
       artist?: string
+      albumArtist?: string
       album?: string
       page?: number
       pageSize?: number
@@ -37,6 +40,7 @@ export const api = {
       if (params.libraryId != null) qs.set('libraryId', String(params.libraryId))
       if (params.search) qs.set('search', params.search)
       if (params.artist) qs.set('artist', params.artist)
+      if (params.albumArtist) qs.set('albumArtist', params.albumArtist)
       if (params.album) qs.set('album', params.album)
       if (params.page != null) qs.set('page', String(params.page))
       if (params.pageSize != null) qs.set('pageSize', String(params.pageSize))

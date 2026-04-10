@@ -4,7 +4,15 @@ using Pulse.Api.Endpoints;
 using Pulse.Api.Services;
 using Serilog;
 
-var dataPath = Environment.GetEnvironmentVariable("DATA_PATH") ?? "/data";
+// Bootstrap config to read paths before the full host is built
+var bootstrapConfig = new ConfigurationBuilder()
+    .SetBasePath(Directory.GetCurrentDirectory())
+    .AddJsonFile("appsettings.json", optional: false)
+    .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production"}.json", optional: true)
+    .AddEnvironmentVariables()
+    .Build();
+
+var dataPath = bootstrapConfig["Pulse:DataPath"] ?? "/data";
 var logsPath = Path.Combine(dataPath, "logs");
 
 Directory.CreateDirectory(dataPath);

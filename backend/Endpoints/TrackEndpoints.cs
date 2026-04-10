@@ -39,6 +39,7 @@ public static class TrackEndpoints
             int? libraryId,
             string? search,
             string? artist,
+            string? albumArtist,
             string? album,
             int page = 1,
             int pageSize = 50) =>
@@ -56,6 +57,9 @@ public static class TrackEndpoints
 
             if (!string.IsNullOrWhiteSpace(artist))
                 query = query.Where(t => t.Artist == artist);
+
+            if (!string.IsNullOrWhiteSpace(albumArtist))
+                query = query.Where(t => t.AlbumArtist == albumArtist || t.Artist == albumArtist);
 
             if (!string.IsNullOrWhiteSpace(album))
                 query = query.Where(t => t.Album == album);

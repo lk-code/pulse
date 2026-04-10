@@ -70,10 +70,11 @@ function scanStatus(id: number) {
           </label>
           <input
             v-model="newPath"
-            placeholder="/media or C:\Media"
+            placeholder="/media"
             class="w-full text-white text-sm rounded-xl focus:outline-none transition-all font-mono"
             style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.09); padding: 0.75rem 1rem; color: white;"
           />
+          <p class="text-xs" style="color: rgba(255,255,255,0.2); margin-top: 0.4rem;">Absolute path inside the container, e.g. <span style="font-family: monospace;">/media</span> or <span style="font-family: monospace;">/media/Rock</span></p>
         </div>
         <p v-if="error" class="text-sm" style="color: rgba(248,113,113,0.8); margin-bottom: 1rem;">{{ error }}</p>
         <button

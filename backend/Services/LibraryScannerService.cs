@@ -8,7 +8,8 @@ namespace Pulse.Api.Services;
 public class LibraryScannerService(
     IServiceScopeFactory scopeFactory,
     ScanStateManager scanStateManager,
-    ILogger<LibraryScannerService> logger)
+    ILogger<LibraryScannerService> logger,
+    IConfiguration configuration)
 {
     private static readonly HashSet<string> AudioExtensions = [".mp3", ".flac", ".ogg", ".wav", ".aac", ".m4a", ".opus"];
     private static readonly HashSet<string> VideoExtensions = [".mp4", ".webm", ".mkv", ".mov"];
@@ -37,7 +38,15 @@ public class LibraryScannerService(
             var library = await db.Libraries.FindAsync(libraryId);
             if (library is null) return;
 
-            var allFiles = Directory.EnumerateFiles(library.RootPath, "*", SearchOption.AllDirectories)
+            var enumerationOptions = new EnumerationOptions
+            {
+                IgnoreInaccessible = true,
+                RecurseSubdirectories = true,
+                ReturnSpecialDirectories = false,
+                AttributesToSkip = FileAttributes.System | FileAttributes.ReparsePoint
+            };
+
+            var allFiles = Directory.EnumerateFiles(library.RootPath, "*", enumerationOptions)
                 .Where(f =>
                 {
                     var ext = Path.GetExtension(f).ToLowerInvariant();
@@ -58,7 +67,7 @@ public class LibraryScannerService(
                 .GroupBy(f => Path.Combine(Path.GetDirectoryName(f)!, Path.GetFileNameWithoutExtension(f)))
                 .ToDictionary(g => g.Key, g => g.ToList());
 
-            var dataPath = Environment.GetEnvironmentVariable("DATA_PATH") ?? "/data";
+            var dataPath = configuration["Pulse:DataPath"] ?? "/data";
             var coversPath = Path.Combine(dataPath, "covers");
             Directory.CreateDirectory(coversPath);
 

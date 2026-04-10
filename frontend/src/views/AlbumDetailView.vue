@@ -19,7 +19,7 @@ const loading = ref(true)
 
 onMounted(async () => {
   try {
-    const res = await api.tracks.list({ artist: albumArtist.value, album: albumName.value, pageSize: 500 })
+    const res = await api.tracks.list({ albumArtist: albumArtist.value, album: albumName.value, pageSize: 500 })
     tracks.value = res.tracks
   } finally {
     loading.value = false
