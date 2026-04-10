@@ -58,7 +58,7 @@ try
     using (var scope = app.Services.CreateScope())
     {
         var db = scope.ServiceProvider.GetRequiredService<PulseDbContext>();
-        db.Database.EnsureCreated();
+        db.Database.Migrate();
     }
 
     app.UseSerilogRequestLogging(options =>
