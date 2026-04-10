@@ -35,9 +35,19 @@ function onLoadedMetadata() {
 
 <template>
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center"
-    style="background: rgba(0,0,0,0.92); backdrop-filter: blur(8px); padding-bottom: 80px;"
+    class="fixed inset-0 z-50"
+    style="background: #000; padding-bottom: 88px;"
   >
+    <video
+      ref="videoRef"
+      :src="streamUrl"
+      style="width: 100%; height: 100%; object-fit: contain; display: block;"
+      preload="auto"
+      @timeupdate="onTimeUpdate"
+      @loadedmetadata="onLoadedMetadata"
+      @ended="player.playNext()"
+    />
+
     <button
       @click="player.toggleMediaMode()"
       class="absolute top-5 right-5 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-105"
@@ -47,16 +57,5 @@ function onLoadedMetadata() {
         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
       </svg>
     </button>
-
-    <video
-      ref="videoRef"
-      :src="streamUrl"
-      class="max-w-full max-h-full rounded-2xl"
-      style="box-shadow: 0 32px 80px rgba(0,0,0,0.8);"
-      preload="auto"
-      @timeupdate="onTimeUpdate"
-      @loadedmetadata="onLoadedMetadata"
-      @ended="player.playNext()"
-    />
   </div>
 </template>
