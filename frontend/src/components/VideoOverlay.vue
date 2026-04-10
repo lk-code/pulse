@@ -46,6 +46,7 @@ function onLoadedMetadata() {
       @timeupdate="onTimeUpdate"
       @loadedmetadata="onLoadedMetadata"
       @ended="player.playNext()"
+      @error="(e) => console.error('Video error:', (e.target as HTMLVideoElement).error)"
     />
 
     <button

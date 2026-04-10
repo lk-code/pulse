@@ -89,7 +89,7 @@ public static class TrackEndpoints
             return Results.Ok(new { total, page, pageSize, tracks });
         });
 
-        group.MapGet("/{id:int}/stream", async (int id, HttpContext ctx, PulseDbContext db) =>
+        group.MapGet("/{id:int}/stream", async (int id, PulseDbContext db) =>
         {
             var track = await db.Tracks.FindAsync(id);
             if (track is null) return Results.NotFound();
@@ -98,44 +98,6 @@ public static class TrackEndpoints
             var ext = Path.GetExtension(track.FilePath).ToLowerInvariant();
             var contentType = MimeTypes.GetValueOrDefault(ext, "application/octet-stream");
 
-            var fileInfo = new FileInfo(track.FilePath);
-            var fileSize = fileInfo.Length;
-
-            var rangeHeader = ctx.Request.Headers.Range.ToString();
-            if (!string.IsNullOrEmpty(rangeHeader) && rangeHeader.StartsWith("bytes="))
-            {
-                var range = rangeHeader["bytes=".Length..];
-                var parts = range.Split('-');
-                var start = long.Parse(parts[0]);
-                var end = parts[1].Length > 0 ? long.Parse(parts[1]) : fileSize - 1;
-                end = Math.Min(end, fileSize - 1);
-                var length = end - start + 1;
-
-                ctx.Response.StatusCode = 206;
-                ctx.Response.Headers.ContentType = contentType;
-                ctx.Response.Headers.ContentLength = length;
-                ctx.Response.Headers.Append("Content-Range", $"bytes {start}-{end}/{fileSize}");
-                ctx.Response.Headers.Append("Accept-Ranges", "bytes");
-
-                using var fs = new FileStream(track.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-                fs.Seek(start, SeekOrigin.Begin);
-
-                var buffer = new byte[81920];
-                var remaining = length;
-
-                while (remaining > 0)
-                {
-                    var toRead = (int)Math.Min(buffer.Length, remaining);
-                    var read = await fs.ReadAsync(buffer.AsMemory(0, toRead));
-                    if (read == 0) break;
-                    await ctx.Response.Body.WriteAsync(buffer.AsMemory(0, read));
-                    remaining -= read;
-                }
-
-                return Results.Empty;
-            }
-
-            ctx.Response.Headers.Append("Accept-Ranges", "bytes");
             return Results.File(track.FilePath, contentType, enableRangeProcessing: true);
         });
     }
