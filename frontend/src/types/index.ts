@@ -8,19 +8,70 @@ export interface Library {
   lastScannedAt: string | null
 }
 
+export interface Artist {
+  id: number
+  name: string
+  normalizedName: string
+}
+
+export interface ArtistSummary extends Artist {
+  albumCount: number
+  trackCount: number
+}
+
+export interface AlbumSummary {
+  id: number
+  name: string
+  normalizedName: string
+  year: number
+  genre: string
+  coverArtPath: string | null
+  trackCount: number
+  primaryArtist: Artist | null
+}
+
+export interface AlbumDetail {
+  id: number
+  name: string
+  normalizedName: string
+  year: number
+  genre: string
+  coverArtPath: string | null
+  artists: (Artist & { isPrimary: boolean })[]
+  tracks: TrackInAlbum[]
+}
+
+export interface TrackInAlbum {
+  id: number
+  title: string
+  normalizedName: string
+  trackNumber: number
+  discNumber: number
+  durationSeconds: number
+  fileType: FileType
+  hasMatchingPair: boolean
+  artist: Artist
+}
+
 export interface Track {
   id: number
   libraryId: number
   title: string
-  artist: string
-  album: string
-  albumArtist: string
-  year: number
-  genre: string
+  normalizedName: string
+  trackNumber: number
+  discNumber: number
   durationSeconds: number
   fileType: FileType
   hasMatchingPair: boolean
   isAvailable: boolean
+  artist: Artist
+  album: {
+    id: number
+    name: string
+    normalizedName: string
+    year: number
+    primaryArtist: Artist | null
+  }
 }
 
 export interface TracksResponse {
@@ -28,6 +79,10 @@ export interface TracksResponse {
   page: number
   pageSize: number
   tracks: Track[]
+}
+
+export interface ArtistDetail extends Artist {
+  albums: AlbumSummary[]
 }
 
 export interface Playlist {

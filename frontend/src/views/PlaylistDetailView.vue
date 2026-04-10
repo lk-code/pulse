@@ -142,7 +142,7 @@ async function onDrop(i: number) {
             <p class="truncate text-sm font-medium leading-tight" :class="player.currentTrack?.id === entry.track.id ? 'text-violet-300' : 'text-white/85'">
               {{ entry.track.title }}
             </p>
-            <p class="truncate text-xs mt-0.5 text-white/30">{{ entry.track.artist }}</p>
+            <p class="truncate text-xs mt-0.5 text-white/30">{{ entry.track.artist.name }}</p>
           </div>
 
           <p class="text-white/20 text-xs tabular-nums flex-shrink-0">{{ formatTime(entry.track.durationSeconds) }}</p>

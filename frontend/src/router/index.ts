@@ -5,9 +5,9 @@ const router = createRouter({
   routes: [
     { path: '/', redirect: '/library' },
     { path: '/library', component: () => import('../views/LibraryView.vue') },
-    { path: '/library/album/:albumArtist/:album', component: () => import('../views/AlbumDetailView.vue') },
     { path: '/artists', component: () => import('../views/ArtistsView.vue') },
-    { path: '/artists/:artist', component: () => import('../views/ArtistTracksView.vue') },
+    { path: '/artist/:artistSlug', component: () => import('../views/ArtistView.vue') },
+    { path: '/artist/:artistSlug/album/:albumSlug', component: () => import('../views/AlbumDetailView.vue') },
     { path: '/playlists', component: () => import('../views/PlaylistsView.vue') },
     { path: '/playlists/:id', component: () => import('../views/PlaylistDetailView.vue') },
     { path: '/search', component: () => import('../views/SearchView.vue') },

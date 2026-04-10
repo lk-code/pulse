@@ -11,7 +11,7 @@ const streamUrl = computed(() =>
   player.currentTrack ? api.tracks.streamUrl(player.currentTrack.id) : ''
 )
 const coverUrl = computed(() =>
-  player.currentTrack ? api.tracks.coverUrl(player.currentTrack.id) : ''
+  player.currentTrack ? api.albums.coverUrl(player.currentTrack.album.id) : ''
 )
 const progressPercent = computed(() =>
   player.duration > 0 ? (player.currentTime / player.duration) * 100 : 0
@@ -95,7 +95,7 @@ function onVolumeInput(e: Event) {
 
         <div v-if="player.currentTrack" class="min-w-0">
           <p class="text-white/90 text-sm font-medium truncate leading-tight">{{ player.currentTrack.title }}</p>
-          <p class="text-white/35 text-xs truncate mt-0.5">{{ player.currentTrack.artist }}</p>
+          <p class="text-white/35 text-xs truncate mt-0.5">{{ player.currentTrack.artist.name }}</p>
         </div>
         <div v-else class="min-w-0">
           <p class="text-white/20 text-sm">Nothing playing</p>

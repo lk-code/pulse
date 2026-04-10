@@ -69,6 +69,8 @@ try
     app.UseCors();
 
     app.MapLibraryEndpoints();
+    app.MapArtistEndpoints();
+    app.MapAlbumEndpoints();
     app.MapTrackEndpoints();
     app.MapPlaylistEndpoints();
     app.MapProgressEndpoints();

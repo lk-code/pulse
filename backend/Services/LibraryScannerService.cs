@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Pulse.Api.Data;
 using Pulse.Api.Models;
-using TagLib;
 
 namespace Pulse.Api.Services;
 
@@ -18,7 +17,6 @@ public class LibraryScannerService(
     {
         var state = scanStateManager.Get(libraryId);
         if (state.IsScanning) return;
-
         _ = Task.Run(() => ScanAsync(libraryId));
     }
 
@@ -56,6 +54,7 @@ public class LibraryScannerService(
 
             state.TotalFiles = allFiles.Count;
 
+            // Mark all existing tracks for this library as unavailable
             var existingTracks = await db.Tracks
                 .Where(t => t.LibraryId == libraryId)
                 .ToDictionaryAsync(t => t.FilePath);
@@ -63,6 +62,9 @@ public class LibraryScannerService(
             foreach (var track in existingTracks.Values)
                 track.IsAvailable = false;
 
+            await db.SaveChangesAsync();
+
+            // Detect paired files (same filename, different extension)
             var filesByNameWithoutExt = allFiles
                 .GroupBy(f => Path.Combine(Path.GetDirectoryName(f)!, Path.GetFileNameWithoutExtension(f)))
                 .ToDictionary(g => g.Key, g => g.ToList());
@@ -71,41 +73,85 @@ public class LibraryScannerService(
             var coversPath = Path.Combine(dataPath, "covers");
             Directory.CreateDirectory(coversPath);
 
+            // In-memory caches for this scan to avoid repeated DB lookups
+            var artistCache = new Dictionary<string, Artist>(StringComparer.Ordinal);
+            var albumCache = new Dictionary<string, Album>(StringComparer.Ordinal);
+
+            // Seed caches with already existing entities
+            await foreach (var a in db.Artists.AsAsyncEnumerable())
+                artistCache[a.NormalizedName] = a;
+
+            await foreach (var al in db.Albums.Include(a => a.AlbumArtists).AsAsyncEnumerable())
+            {
+                var primary = al.AlbumArtists.FirstOrDefault(aa => aa.IsPrimary);
+                if (primary is not null)
+                    albumCache[$"{primary.ArtistId}:{al.NormalizedName}"] = al;
+            }
+
             foreach (var filePath in allFiles)
             {
                 state.CurrentFile = Path.GetFileName(filePath);
 
                 try
                 {
-                    var ext = Path.GetExtension(filePath).ToLowerInvariant();
-                    var fileType = AudioExtensions.Contains(ext) ? FileType.Audio : FileType.Video;
-                    var lastModified = new DateTimeOffset(new FileInfo(filePath).LastWriteTimeUtc, TimeSpan.Zero);
-
                     var nameWithoutExt = Path.Combine(
                         Path.GetDirectoryName(filePath)!,
                         Path.GetFileNameWithoutExtension(filePath));
                     var hasPair = filesByNameWithoutExt.TryGetValue(nameWithoutExt, out var siblings)
                         && siblings!.Count > 1;
 
+                    var lastModified = new DateTimeOffset(new FileInfo(filePath).LastWriteTimeUtc, TimeSpan.Zero);
+                    var ext = Path.GetExtension(filePath).ToLowerInvariant();
+                    var fileType = AudioExtensions.Contains(ext) ? FileType.Audio : FileType.Video;
+
+                    var meta = ReadMetadata(filePath);
+
+                    // Resolve or create the primary (album) artist
+                    var albumArtist = await GetOrCreateArtistAsync(db, artistCache, meta.AlbumArtistName);
+
+                    // Resolve or create the track artist (may differ from album artist)
+                    var trackArtist = meta.TrackArtistName == meta.AlbumArtistName
+                        ? albumArtist
+                        : await GetOrCreateArtistAsync(db, artistCache, meta.TrackArtistName);
+
+                    // Resolve or create the album
+                    var album = await GetOrCreateAlbumAsync(db, albumCache, albumArtist, trackArtist, meta, coversPath);
+
                     if (existingTracks.TryGetValue(filePath, out var existing))
                     {
                         existing.IsAvailable = true;
                         existing.HasMatchingPair = hasPair;
+                        existing.ArtistId = trackArtist.Id;
+                        existing.AlbumId = album.Id;
 
                         if (existing.FileLastModified != lastModified)
                         {
-                            UpdateTrackMetadata(existing, filePath, coversPath);
+                            existing.Title = meta.Title;
+                            existing.NormalizedName = Normalizer.Normalize(meta.Title);
+                            existing.TrackNumber = meta.TrackNumber;
+                            existing.DiscNumber = meta.DiscNumber;
+                            existing.DurationSeconds = meta.DurationSeconds;
+                            existing.FileType = fileType;
                             existing.FileLastModified = lastModified;
                             existing.UpdatedAt = DateTimeOffset.UtcNow;
                         }
+
+                        await db.SaveChangesAsync();
                     }
                     else
                     {
                         var newTrack = new Track
                         {
                             LibraryId = libraryId,
+                            AlbumId = album.Id,
+                            ArtistId = trackArtist.Id,
                             FilePath = filePath,
                             FileType = fileType,
+                            Title = meta.Title,
+                            NormalizedName = Normalizer.Normalize(meta.Title),
+                            TrackNumber = meta.TrackNumber,
+                            DiscNumber = meta.DiscNumber,
+                            DurationSeconds = meta.DurationSeconds,
                             HasMatchingPair = hasPair,
                             FileLastModified = lastModified,
                             IsAvailable = true,
@@ -113,12 +159,15 @@ public class LibraryScannerService(
                             UpdatedAt = DateTimeOffset.UtcNow
                         };
 
-                        UpdateTrackMetadata(newTrack, filePath, coversPath);
                         db.Tracks.Add(newTrack);
                         await db.SaveChangesAsync();
 
-                        ExtractCoverArt(newTrack, filePath, coversPath);
-                        await db.SaveChangesAsync();
+                        // Extract cover art for the album if not yet done
+                        if (album.CoverArtPath is null)
+                        {
+                            ExtractCoverArt(album, filePath, coversPath);
+                            await db.SaveChangesAsync();
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -127,11 +176,6 @@ public class LibraryScannerService(
                 }
 
                 state.ProcessedFiles++;
-            }
-
-            foreach (var track in existingTracks.Values.Where(t => t.IsAvailable))
-            {
-                ExtractCoverArtIfMissing(track, coversPath);
             }
 
             library.LastScannedAt = DateTimeOffset.UtcNow;
@@ -151,50 +195,138 @@ public class LibraryScannerService(
         }
     }
 
-    private static void UpdateTrackMetadata(Track track, string filePath, string coversPath)
+    private static async Task<Artist> GetOrCreateArtistAsync(
+        PulseDbContext db,
+        Dictionary<string, Artist> cache,
+        string name)
+    {
+        var normalized = Normalizer.Normalize(name);
+        if (cache.TryGetValue(normalized, out var existing))
+            return existing;
+
+        var artist = new Artist { Name = name, NormalizedName = normalized };
+        db.Artists.Add(artist);
+        await db.SaveChangesAsync();
+        cache[normalized] = artist;
+        return artist;
+    }
+
+    private static async Task<Album> GetOrCreateAlbumAsync(
+        PulseDbContext db,
+        Dictionary<string, Album> albumCache,
+        Artist primaryArtist,
+        Artist trackArtist,
+        TrackMetadata meta,
+        string coversPath)
+    {
+        var normalizedAlbum = Normalizer.Normalize(meta.AlbumName);
+        var cacheKey = $"{primaryArtist.Id}:{normalizedAlbum}";
+
+        if (!albumCache.TryGetValue(cacheKey, out var album))
+        {
+            album = new Album
+            {
+                Name = meta.AlbumName,
+                NormalizedName = normalizedAlbum,
+                Year = meta.Year,
+                Genre = meta.Genre
+            };
+            db.Albums.Add(album);
+            await db.SaveChangesAsync();
+
+            db.AlbumArtists.Add(new AlbumArtist { AlbumId = album.Id, ArtistId = primaryArtist.Id, IsPrimary = true });
+            await db.SaveChangesAsync();
+
+            // Reload with AlbumArtists so the cache entry is complete
+            album.AlbumArtists = [new AlbumArtist { AlbumId = album.Id, ArtistId = primaryArtist.Id, IsPrimary = true }];
+            albumCache[cacheKey] = album;
+        }
+
+        // Link track artist to album if different from primary and not yet linked
+        if (trackArtist.Id != primaryArtist.Id)
+        {
+            var alreadyLinked = album.AlbumArtists.Any(aa => aa.ArtistId == trackArtist.Id);
+            if (!alreadyLinked)
+            {
+                var exists = await db.AlbumArtists.AnyAsync(aa => aa.AlbumId == album.Id && aa.ArtistId == trackArtist.Id);
+                if (!exists)
+                {
+                    db.AlbumArtists.Add(new AlbumArtist { AlbumId = album.Id, ArtistId = trackArtist.Id, IsPrimary = false });
+                    await db.SaveChangesAsync();
+                    album.AlbumArtists.Add(new AlbumArtist { AlbumId = album.Id, ArtistId = trackArtist.Id, IsPrimary = false });
+                }
+            }
+        }
+
+        return album;
+    }
+
+    private static void ExtractCoverArt(Album album, string filePath, string coversPath)
+    {
+        try
+        {
+            using var tagFile = TagLib.File.Create(filePath);
+            var pictures = tagFile.Tag.Pictures;
+            if (pictures.Length > 0)
+            {
+                var coverPath = Path.Combine(coversPath, $"album-{album.Id}.png");
+                File.WriteAllBytes(coverPath, pictures[0].Data.Data);
+                album.CoverArtPath = coverPath;
+            }
+        }
+        catch { }
+    }
+
+    private static TrackMetadata ReadMetadata(string filePath)
     {
         try
         {
             using var tagFile = TagLib.File.Create(filePath);
             var tag = tagFile.Tag;
 
-            track.Title = tag.Title ?? Path.GetFileNameWithoutExtension(filePath);
-            track.Artist = tag.FirstPerformer ?? string.Empty;
-            track.Album = tag.Album ?? string.Empty;
-            track.AlbumArtist = tag.FirstAlbumArtist ?? string.Empty;
-            track.Year = (int)tag.Year;
-            track.Genre = tag.FirstGenre ?? string.Empty;
-            track.DurationSeconds = (int)tagFile.Properties.Duration.TotalSeconds;
-            track.FileType = GetFileType(filePath);
+            var albumArtistName = tag.FirstAlbumArtist?.Trim();
+            var trackArtistName = tag.FirstPerformer?.Trim();
+            var primary = !string.IsNullOrEmpty(albumArtistName) ? albumArtistName
+                        : !string.IsNullOrEmpty(trackArtistName) ? trackArtistName
+                        : "Unknown Artist";
+            var track = !string.IsNullOrEmpty(trackArtistName) ? trackArtistName : primary;
+
+            return new TrackMetadata
+            {
+                Title = !string.IsNullOrEmpty(tag.Title) ? tag.Title.Trim() : Path.GetFileNameWithoutExtension(filePath),
+                AlbumArtistName = primary,
+                TrackArtistName = track,
+                AlbumName = !string.IsNullOrEmpty(tag.Album) ? tag.Album.Trim() : "Unknown Album",
+                Year = (int)tag.Year,
+                Genre = tag.FirstGenre?.Trim() ?? string.Empty,
+                TrackNumber = (int)tag.Track,
+                DiscNumber = (int)(tag.Disc > 0 ? tag.Disc : 1),
+                DurationSeconds = (int)tagFile.Properties.Duration.TotalSeconds
+            };
         }
         catch
         {
-            track.Title = Path.GetFileNameWithoutExtension(filePath);
-            track.FileType = GetFileType(filePath);
-        }
-    }
-
-    private static void ExtractCoverArt(Track track, string filePath, string coversPath)
-    {
-        try
-        {
-            using var tagFile = TagLib.File.Create(filePath);
-            var pictures = tagFile.Tag.Pictures;
-
-            if (pictures.Length > 0)
+            return new TrackMetadata
             {
-                var coverPath = Path.Combine(coversPath, $"{track.Id}.png");
-                System.IO.File.WriteAllBytes(coverPath, pictures[0].Data.Data);
-                track.CoverArtPath = coverPath;
-            }
+                Title = Path.GetFileNameWithoutExtension(filePath),
+                AlbumArtistName = "Unknown Artist",
+                TrackArtistName = "Unknown Artist",
+                AlbumName = "Unknown Album"
+            };
         }
-        catch { }
     }
 
-    private static void ExtractCoverArtIfMissing(Track track, string coversPath)
+    private sealed record TrackMetadata
     {
-        if (track.CoverArtPath != null) return;
-        ExtractCoverArt(track, track.FilePath, coversPath);
+        public string Title { get; init; } = string.Empty;
+        public string AlbumArtistName { get; init; } = string.Empty;
+        public string TrackArtistName { get; init; } = string.Empty;
+        public string AlbumName { get; init; } = string.Empty;
+        public int Year { get; init; }
+        public string Genre { get; init; } = string.Empty;
+        public int TrackNumber { get; init; }
+        public int DiscNumber { get; init; }
+        public int DurationSeconds { get; init; }
     }
 
     private static FileType GetFileType(string filePath)

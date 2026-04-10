@@ -20,27 +20,16 @@ public static class TrackEndpoints
         [".mov"] = "video/quicktime"
     };
 
-    private const string PlaceholderSvg = """
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
-          <rect width="100" height="100" fill="#1e1b4b"/>
-          <circle cx="50" cy="50" r="25" fill="none" stroke="#7c3aed" stroke-width="3"/>
-          <circle cx="50" cy="50" r="8" fill="#7c3aed"/>
-          <line x1="50" y1="25" x2="50" y2="10" stroke="#7c3aed" stroke-width="3"/>
-        </svg>
-        """;
-
     public static void MapTrackEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/tracks");
 
         group.MapGet("/", async (
-            HttpContext ctx,
             PulseDbContext db,
             int? libraryId,
+            int? albumId,
+            int? artistId,
             string? search,
-            string? artist,
-            string? albumArtist,
-            string? album,
             int page = 1,
             int pageSize = 50) =>
         {
@@ -49,25 +38,24 @@ public static class TrackEndpoints
             if (libraryId.HasValue)
                 query = query.Where(t => t.LibraryId == libraryId.Value);
 
+            if (albumId.HasValue)
+                query = query.Where(t => t.AlbumId == albumId.Value);
+
+            if (artistId.HasValue)
+                query = query.Where(t => t.ArtistId == artistId.Value ||
+                                         t.Album.AlbumArtists.Any(aa => aa.ArtistId == artistId.Value));
+
             if (!string.IsNullOrWhiteSpace(search))
                 query = query.Where(t =>
                     t.Title.Contains(search) ||
-                    t.Artist.Contains(search) ||
-                    t.Album.Contains(search));
-
-            if (!string.IsNullOrWhiteSpace(artist))
-                query = query.Where(t => t.Artist == artist);
-
-            if (!string.IsNullOrWhiteSpace(albumArtist))
-                query = query.Where(t => t.AlbumArtist == albumArtist || t.Artist == albumArtist);
-
-            if (!string.IsNullOrWhiteSpace(album))
-                query = query.Where(t => t.Album == album);
+                    t.Artist.Name.Contains(search) ||
+                    t.Album.Name.Contains(search));
 
             var total = await query.CountAsync();
             var tracks = await query
-                .OrderBy(t => t.AlbumArtist)
-                .ThenBy(t => t.Album)
+                .OrderBy(t => t.Album.Name)
+                .ThenBy(t => t.DiscNumber)
+                .ThenBy(t => t.TrackNumber)
                 .ThenBy(t => t.Title)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
@@ -76,43 +64,29 @@ public static class TrackEndpoints
                     t.Id,
                     t.LibraryId,
                     t.Title,
-                    t.Artist,
-                    t.Album,
-                    t.AlbumArtist,
-                    t.Year,
-                    t.Genre,
+                    t.NormalizedName,
+                    t.TrackNumber,
+                    t.DiscNumber,
                     t.DurationSeconds,
                     t.FileType,
                     t.HasMatchingPair,
-                    t.IsAvailable
+                    t.IsAvailable,
+                    Artist = new { t.Artist.Id, t.Artist.Name, t.Artist.NormalizedName },
+                    Album = new
+                    {
+                        t.Album.Id,
+                        t.Album.Name,
+                        t.Album.NormalizedName,
+                        t.Album.Year,
+                        PrimaryArtist = t.Album.AlbumArtists
+                            .Where(aa => aa.IsPrimary)
+                            .Select(aa => new { aa.Artist.Id, aa.Artist.Name, aa.Artist.NormalizedName })
+                            .FirstOrDefault()
+                    }
                 })
                 .ToListAsync();
 
             return Results.Ok(new { total, page, pageSize, tracks });
-        });
-
-        group.MapGet("/{id:int}", async (int id, PulseDbContext db) =>
-        {
-            var track = await db.Tracks
-                .Where(t => t.Id == id)
-                .Select(t => new
-                {
-                    t.Id,
-                    t.LibraryId,
-                    t.Title,
-                    t.Artist,
-                    t.Album,
-                    t.AlbumArtist,
-                    t.Year,
-                    t.Genre,
-                    t.DurationSeconds,
-                    t.FileType,
-                    t.HasMatchingPair,
-                    t.IsAvailable
-                })
-                .FirstOrDefaultAsync();
-
-            return track is null ? Results.NotFound() : Results.Ok(track);
         });
 
         group.MapGet("/{id:int}/stream", async (int id, HttpContext ctx, PulseDbContext db) =>
@@ -163,17 +137,6 @@ public static class TrackEndpoints
 
             ctx.Response.Headers.Append("Accept-Ranges", "bytes");
             return Results.File(track.FilePath, contentType, enableRangeProcessing: true);
-        });
-
-        group.MapGet("/{id:int}/cover", async (int id, PulseDbContext db) =>
-        {
-            var track = await db.Tracks.FindAsync(id);
-            if (track is null) return Results.NotFound();
-
-            if (track.CoverArtPath is not null && File.Exists(track.CoverArtPath))
-                return Results.File(track.CoverArtPath, "image/png");
-
-            return Results.Content(PlaceholderSvg, "image/svg+xml");
         });
     }
 }

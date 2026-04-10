@@ -1,4 +1,7 @@
-import type { Library, Track, TracksResponse, Playlist, PlaylistTrackEntry, ScanStatus, PlaybackProgress } from '../types'
+import type {
+  Library, TracksResponse, Playlist, PlaylistTrackEntry,
+  ScanStatus, PlaybackProgress, ArtistSummary, ArtistDetail, AlbumSummary, AlbumDetail
+} from '../types'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -26,29 +29,48 @@ export const api = {
       request<ScanStatus>(`/api/libraries/${id}/scan/status`)
   },
 
+  artists: {
+    list: (params: { search?: string; page?: number; pageSize?: number } = {}) => {
+      const qs = new URLSearchParams()
+      if (params.search) qs.set('search', params.search)
+      if (params.page != null) qs.set('page', String(params.page))
+      if (params.pageSize != null) qs.set('pageSize', String(params.pageSize))
+      return request<{ total: number; artists: ArtistSummary[] }>(`/api/artists?${qs}`)
+    },
+    get: (id: number) => request<ArtistDetail>(`/api/artists/${id}`)
+  },
+
+  albums: {
+    list: (params: { search?: string; page?: number; pageSize?: number } = {}) => {
+      const qs = new URLSearchParams()
+      if (params.search) qs.set('search', params.search)
+      if (params.page != null) qs.set('page', String(params.page))
+      if (params.pageSize != null) qs.set('pageSize', String(params.pageSize))
+      return request<{ total: number; albums: AlbumSummary[] }>(`/api/albums?${qs}`)
+    },
+    get: (id: number) => request<AlbumDetail>(`/api/albums/${id}`),
+    coverUrl: (id: number) => `${apiBase}/api/albums/${id}/cover`
+  },
+
   tracks: {
     list: (params: {
       libraryId?: number
+      albumId?: number
+      artistId?: number
       search?: string
-      artist?: string
-      albumArtist?: string
-      album?: string
       page?: number
       pageSize?: number
-    }) => {
+    } = {}) => {
       const qs = new URLSearchParams()
       if (params.libraryId != null) qs.set('libraryId', String(params.libraryId))
+      if (params.albumId != null) qs.set('albumId', String(params.albumId))
+      if (params.artistId != null) qs.set('artistId', String(params.artistId))
       if (params.search) qs.set('search', params.search)
-      if (params.artist) qs.set('artist', params.artist)
-      if (params.albumArtist) qs.set('albumArtist', params.albumArtist)
-      if (params.album) qs.set('album', params.album)
       if (params.page != null) qs.set('page', String(params.page))
       if (params.pageSize != null) qs.set('pageSize', String(params.pageSize))
       return request<TracksResponse>(`/api/tracks?${qs}`)
     },
-    get: (id: number) => request<Track>(`/api/tracks/${id}`),
-    streamUrl: (id: number) => `/api/tracks/${id}/stream`,
-    coverUrl: (id: number) => `/api/tracks/${id}/cover`
+    streamUrl: (id: number) => `${apiBase}/api/tracks/${id}/stream`
   },
 
   playlists: {

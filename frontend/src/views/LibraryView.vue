@@ -2,46 +2,29 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
-import type { Track } from '../types'
-
-interface Album {
-  albumArtist: string
-  album: string
-  tracks: Track[]
-  coverId: number
-}
+import { toSlug } from '../composables/useSlug'
+import type { AlbumSummary } from '../types'
 
 const router = useRouter()
-const albums = ref<Album[]>([])
+const albums = ref<AlbumSummary[]>([])
 const loading = ref(true)
 
 onMounted(async () => {
   try {
-    const res = await api.tracks.list({ pageSize: 2000 })
-    const map = new Map<string, Album>()
-    for (const track of res.tracks) {
-      const key = `${track.albumArtist || track.artist}||${track.album}`
-      if (!map.has(key)) {
-        map.set(key, {
-          albumArtist: track.albumArtist || track.artist,
-          album: track.album || 'Unknown Album',
-          tracks: [],
-          coverId: track.id
-        })
-      }
-      map.get(key)!.tracks.push(track)
-    }
-    albums.value = [...map.values()].sort((a, b) => {
-      const ar = a.albumArtist.localeCompare(b.albumArtist)
-      return ar !== 0 ? ar : a.album.localeCompare(b.album)
+    const res = await api.albums.list({ pageSize: 1000 })
+    albums.value = res.albums.sort((a, b) => {
+      const ar = (a.primaryArtist?.name ?? '').localeCompare(b.primaryArtist?.name ?? '')
+      return ar !== 0 ? ar : a.name.localeCompare(b.name)
     })
   } finally {
     loading.value = false
   }
 })
 
-function openAlbum(album: Album) {
-  router.push(`/library/album/${encodeURIComponent(album.albumArtist)}/${encodeURIComponent(album.album)}`)
+function albumUrl(album: AlbumSummary): string {
+  const artist = album.primaryArtist
+  if (!artist) return '/library'
+  return `/artist/${toSlug(artist.normalizedName, artist.id)}/album/${toSlug(album.normalizedName, album.id)}`
 }
 </script>
 
@@ -60,10 +43,7 @@ function openAlbum(album: Album) {
       <span class="text-sm">Loading library…</span>
     </div>
 
-    <div
-      v-else-if="albums.length === 0"
-      class="flex flex-col items-center justify-center mt-24 gap-4"
-    >
+    <div v-else-if="albums.length === 0" class="flex flex-col items-center justify-center mt-24 gap-4">
       <div class="w-16 h-16 rounded-2xl flex items-center justify-center" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);">
         <svg class="w-7 h-7 text-white/20" fill="currentColor" viewBox="0 0 24 24">
           <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
@@ -78,19 +58,19 @@ function openAlbum(album: Album) {
     <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
       <div
         v-for="album in albums"
-        :key="`${album.albumArtist}-${album.album}`"
-        @click="openAlbum(album)"
+        :key="album.id"
+        @click="router.push(albumUrl(album))"
         class="cursor-pointer group"
       >
         <div class="aspect-square rounded-2xl overflow-hidden mb-2.5 relative" style="box-shadow: 0 8px 24px rgba(0,0,0,0.4);">
           <img
-            :src="api.tracks.coverUrl(album.coverId)"
-            :alt="album.album"
+            :src="api.albums.coverUrl(album.id)"
+            :alt="album.name"
             class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
-          <div class="absolute inset-0 transition-all duration-300 flex items-end justify-end p-2.5"
-            style="background: linear-gradient(to top, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 100%);"
-            :style="{background: 'linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 60%)'}"
+          <div
+            class="absolute inset-0 transition-all duration-300 flex items-end justify-end p-2.5"
+            style="background: linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 60%);"
           >
             <div
               class="w-9 h-9 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-1 group-hover:translate-y-0"
@@ -102,8 +82,8 @@ function openAlbum(album: Album) {
             </div>
           </div>
         </div>
-        <p class="text-white/85 text-sm font-medium truncate leading-tight mt-3">{{ album.album }}</p>
-        <p class="text-white/35 text-xs truncate mt-1">{{ album.albumArtist }}</p>
+        <p class="text-white/85 text-sm font-medium truncate leading-tight mt-3">{{ album.name }}</p>
+        <p class="text-white/35 text-xs truncate mt-1">{{ album.primaryArtist?.name ?? 'Unknown Artist' }}</p>
       </div>
     </div>
   </div>

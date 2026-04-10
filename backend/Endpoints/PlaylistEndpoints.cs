@@ -72,13 +72,22 @@ public static class PlaylistEndpoints
                     {
                         pt.Track.Id,
                         pt.Track.Title,
-                        pt.Track.Artist,
-                        pt.Track.Album,
-                        pt.Track.AlbumArtist,
+                        pt.Track.NormalizedName,
                         pt.Track.DurationSeconds,
                         pt.Track.FileType,
                         pt.Track.HasMatchingPair,
-                        pt.Track.IsAvailable
+                        pt.Track.IsAvailable,
+                        Artist = new { pt.Track.Artist.Id, pt.Track.Artist.Name, pt.Track.Artist.NormalizedName },
+                        Album = new
+                        {
+                            pt.Track.Album.Id,
+                            pt.Track.Album.Name,
+                            pt.Track.Album.NormalizedName,
+                            PrimaryArtist = pt.Track.Album.AlbumArtists
+                                .Where(aa => aa.IsPrimary)
+                                .Select(aa => new { aa.Artist.Id, aa.Artist.Name, aa.Artist.NormalizedName })
+                                .FirstOrDefault()
+                        }
                     }
                 })
                 .ToListAsync();

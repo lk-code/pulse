@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { usePlayerStore } from '../stores/playerStore'
 import { formatTime } from '../composables/useFormatTime'
-import { api } from '../api'
+import { toSlug } from '../composables/useSlug'
 import type { Track } from '../types'
 
 const props = defineProps<{
@@ -13,6 +14,7 @@ const props = defineProps<{
   showCover?: boolean
 }>()
 
+const router = useRouter()
 const player = usePlayerStore()
 const isActive = computed(() => player.currentTrack?.id === props.track.id)
 
@@ -22,26 +24,37 @@ function play() {
   player.setQueue(q, idx)
   player.isPlaying = true
 }
+
+function goToAlbum() {
+  const album = props.track.album
+  const artist = album.primaryArtist
+  if (!artist) return
+  const trackParam = `?track=${props.track.id}`
+  router.push(
+    `/artist/${toSlug(artist.normalizedName, artist.id)}/album/${toSlug(album.normalizedName, album.id)}${trackParam}`
+  )
+}
+
+const coverUrl = computed(() => {
+  const albumId = props.track.album.id
+  return `/api/albums/${albumId}/cover`
+})
 </script>
 
 <template>
   <div
-    @dblclick="play"
+    @click="goToAlbum"
+    @dblclick.stop="play"
     class="flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer group transition-all duration-150"
     :class="isActive
       ? 'bg-violet-500/10 border border-violet-500/20'
       : 'hover:bg-white/[0.04] border border-transparent'"
   >
     <div class="w-7 flex items-center justify-center flex-shrink-0">
-      <span
-        v-if="!isActive"
-        class="text-white/25 text-xs tabular-nums group-hover:hidden"
-      >{{ index != null ? index + 1 : '' }}</span>
-      <button
-        v-if="!isActive"
-        @click.stop="play"
-        class="hidden group-hover:flex items-center justify-center"
-      >
+      <span v-if="!isActive" class="text-white/25 text-xs tabular-nums group-hover:hidden">
+        {{ index != null ? index + 1 : '' }}
+      </span>
+      <button v-if="!isActive" @click.stop="play" class="hidden group-hover:flex items-center justify-center">
         <svg class="w-3.5 h-3.5 text-white/70" fill="currentColor" viewBox="0 0 24 24">
           <path d="M8 5v14l11-7z"/>
         </svg>
@@ -54,7 +67,7 @@ function play() {
     </div>
 
     <div v-if="showCover" class="w-9 h-9 rounded-lg overflow-hidden flex-shrink-0 bg-white/5">
-      <img :src="api.tracks.coverUrl(track.id)" class="w-full h-full object-cover" alt="" />
+      <img :src="coverUrl" class="w-full h-full object-cover" alt="" />
     </div>
 
     <div class="flex-1 min-w-0">
@@ -62,7 +75,8 @@ function play() {
         {{ track.title }}
       </p>
       <p class="truncate text-xs mt-0.5" :class="isActive ? 'text-violet-400/70' : 'text-white/35'">
-        {{ track.artist || 'Unknown Artist' }}
+        {{ track.artist.name || 'Unknown Artist' }}
+        <span class="text-white/20"> · {{ track.album.name }}</span>
       </p>
     </div>
 
